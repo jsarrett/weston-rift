@@ -442,7 +442,16 @@ if test x$enable_wcap_tools = xyes; then
   WCAP_LIBS="$WCAP_LIBS -lm"
 fi
 
-PKG_CHECK_MODULES(OVR, [libovr]) #TODO
+AC_ARG_WITH(hmdlib,
+	    AS_HELP_STRING([--with-hmdlib=@<:@libovr@:>@]
+			   [Which HMD library to use]),
+			   [],[with_hmdlib="libovr"])
+
+if test "x$with_hmdlib" = "xlibovr"; then
+PKG_CHECK_MODULES(HMDLIB, [libovr]) #TODO
+else
+	AC_ERROR([Unknown HMD library requested])
+fi
 
 PKG_CHECK_MODULES(SETBACKLIGHT, [libudev libdrm], enable_setbacklight=yes, enable_setbacklight=no)
 AM_CONDITIONAL(BUILD_SETBACKLIGHT, test "x$enable_setbacklight" = "xyes")

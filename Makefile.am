@@ -22,7 +22,7 @@ weston.ini : $(srcdir)/weston.ini.in
 
 all-local : weston.ini
 
-AM_CFLAGS = $(GCC_CFLAGS) $(OVR_CFLAGS)
+AM_CFLAGS = $(GCC_CFLAGS) $(HMDLIB_CFLAGS)
 
 AM_CPPFLAGS = 					\
 	-I$(top_srcdir)/src			\
@@ -35,7 +35,7 @@ AM_CPPFLAGS = 					\
 	-DMODULEDIR='"$(moduledir)"'		\
 	-DLIBEXECDIR='"$(libexecdir)"'		\
 	-DBINDIR='"$(bindir)"'			\
-	$(OVR_CFLAGS)
+	$(HMDLIB_CFLAGS)
 
 CLEANFILES = weston.ini $(BUILT_SOURCES)
 
@@ -45,7 +45,7 @@ weston_LDFLAGS = -export-dynamic
 weston_CPPFLAGS = $(AM_CPPFLAGS) -DIN_WESTON
 weston_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS) $(LIBUNWIND_CFLAGS)
 weston_LDADD = $(COMPOSITOR_LIBS) $(LIBUNWIND_LIBS) \
-	$(DLOPEN_LIBS) $(EGL_LIBS) $(OVR_LIBS) -lm libshared.la -lGL
+	$(DLOPEN_LIBS) $(EGL_LIBS) $(HMDLIB_LIBS) -lm libshared.la -lGL
 
 weston_SOURCES =					\
 	src/git-version.h				\
@@ -697,7 +697,7 @@ desktop_shell_la_CPPFLAGS =			\
 	-DMODULEDIR='"$(moduledir)"'		\
 	-DLIBEXECDIR='"$(libexecdir)"'		\
 	-DIN_WESTON				\
-	$(OVR_CFLAGS)
+	$(HMDLIB_CFLAGS)
 
 desktop_shell_la_LDFLAGS = -module -avoid-version
 desktop_shell_la_LIBADD = $(COMPOSITOR_LIBS) libshared.la
@@ -726,7 +726,7 @@ fullscreen_shell_la_CPPFLAGS =			\
 	-I$(top_srcdir)/src			\
 	-I$(top_builddir)/src			\
 	-DIN_WESTON				\
-	$(OVR_CFLAGS)
+	$(HMDLIB_CFLAGS)
 
 fullscreen_shell_la_LDFLAGS = -module -avoid-version
 fullscreen_shell_la_LIBADD = $(COMPOSITOR_LIBS)
@@ -776,7 +776,7 @@ xwayland_la_CPPFLAGS =				\
 	-DMODULEDIR='"$(moduledir)"'		\
 	-DLIBEXECDIR='"$(libexecdir)"'		\
 	-DXSERVER_PATH='"@XSERVER_PATH@"'	\
-	$(OVR_CFLAGS)
+	$(HMDLIB_CFLAGS)
 
 xwayland_la_LDFLAGS = -module -avoid-version
 xwayland_la_LIBADD =			\
