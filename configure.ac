@@ -443,14 +443,20 @@ if test x$enable_wcap_tools = xyes; then
 fi
 
 AC_ARG_WITH(hmdlib,
-	    AS_HELP_STRING([--with-hmdlib=@<:@libovr@:>@]
+	    AS_HELP_STRING([--with-hmdlib=@<:@libovr|openhmd@:>@]
 			   [Which HMD library to use]),
 			   [],[with_hmdlib="libovr"])
 
 if test "x$with_hmdlib" = "xlibovr"; then
-PKG_CHECK_MODULES(HMDLIB, [libovr]) #TODO
+    PKG_CHECK_MODULES(HMDLIB, [libovr]) #TODO
+    AC_DEFINE([LIBOVR], [], ["use LibOVR"])
+else
+if test "x$with_hmdlib" = "xopenhmd"; then
+    PKG_CHECK_MODULES(HMDLIB, [openhmd]) #TODO
+    AC_DEFINE([OPENHMD], [], ["use OpenHMD"])
 else
 	AC_ERROR([Unknown HMD library requested])
+fi
 fi
 
 PKG_CHECK_MODULES(SETBACKLIGHT, [libudev libdrm], enable_setbacklight=yes, enable_setbacklight=no)
