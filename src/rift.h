@@ -27,17 +27,22 @@
 #include <GLES2/gl2.h>
 #if defined(LIBOVR)
     #include <OVR_CAPI.h>
+#elif defined(OPENHMD)
+    #include <openhmd.h>
 #else
     #error "don't know what HMD library to use"
 #endif
 
 struct EyeArg {
   GLuint framebuffer;
-  ovrVector2f scale;
-  ovrVector2f offset;
+  struct weston_vector scale;
+  struct weston_vector offset;
+  struct weston_matrix projection;
+#if defined(LIBOVR)
   ovrDistortionMesh mesh;
-  ovrMatrix4f projection;
+#endif
   GLuint indexBuffer;
+  GLuint indexBufferCount;
   GLuint vertexBuffer;
   GLuint uvsBuffer[3];
   GLuint texture;
@@ -87,8 +92,10 @@ struct oculus_rift {
   struct eye_shader_ *eye_shader;
   struct scene_ *scene;
   struct EyeArg eyeArgs[2];
-  ovrVector3f hmdToEyeOffsets[2];
+  struct weston_vector hmdToEyeOffsets[2];
+#if defined(LIBOVR)
   ovrHmd hmd;
+#endif
   int width;
   int height;
   int enabled;

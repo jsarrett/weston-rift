@@ -81,257 +81,71 @@ static const char* eye_fragment_shader =
 
 // End of shaders
 
-// Matrix, Quaternion, and Vector math functions, using ovr types
-// There are weston_matrix functions, maybe use those instead?
+// Matrix, Quaternion, and Vector math functions needed not in weston/matrix.h
 
-static inline ovrMatrix4f initIdentity(void)
+static inline struct weston_matrix initIdentity(void)
 {
-  ovrMatrix4f r;
-
-  r.M[0][0] = 1; r.M[0][1] = 0; r.M[0][2] = 0; r.M[0][3] = 0;
-  r.M[1][0] = 0; r.M[1][1] = 1; r.M[1][2] = 0; r.M[1][3] = 0;
-  r.M[2][0] = 0; r.M[2][1] = 0; r.M[2][2] = 1; r.M[2][3] = 0;
-  r.M[3][0] = 0; r.M[3][1] = 0; r.M[3][2] = 0; r.M[3][3] = 1;
+  struct weston_matrix r;
+  //according to weston source matricies are initialized to identity
+  weston_matrix_init(&r);
 
   return r;
 }
 
-static inline ovrMatrix4f initScale(float x, float y, float z)
+static inline struct weston_matrix initTranslationF(float x, float y, float z)
 {
-  ovrMatrix4f r;
+  struct weston_matrix r;
 
-  r.M[0][0] = x; r.M[0][1] = 0; r.M[0][2] = 0; r.M[0][3] = 0;
-  r.M[1][0] = 0; r.M[1][1] = y; r.M[1][2] = 0; r.M[1][3] = 0;
-  r.M[2][0] = 0; r.M[2][1] = 0; r.M[2][2] = z; r.M[2][3] = 0;
-  r.M[3][0] = 0; r.M[3][1] = 0; r.M[3][2] = 0; r.M[3][3] = 1;
+  weston_matrix_init(&r);
+  /*r.d[0] = 1; r.d[4] = 0; r.d[8] = 0;*/ r.d[12] = x;
+  /*r.d[1] = 0; r.d[5] = 1; r.d[9] = 0;*/ r.d[13] = y;
+  /*r.d[2] = 0; r.d[6] = 0; r.d[10] = 1;*/ r.d[14] = z;
+  /*r.d[3] = 0; r.d[7] = 0; r.d[11] = 0; r.d[15] = 1;*/
+  r.type = WESTON_MATRIX_TRANSFORM_TRANSLATE;
 
   return r;
 }
 
-static inline ovrMatrix4f initTranslationF(float x, float y, float z)
+
+static inline struct weston_matrix quatfToMatrix4f(const struct weston_vector q)
 {
-  ovrMatrix4f r;
+  struct weston_matrix m1, m2;
 
-  r.M[0][0] = 1; r.M[0][1] = 0; r.M[0][2] = 0; r.M[0][3] = x;
-  r.M[1][0] = 0; r.M[1][1] = 1; r.M[1][2] = 0; r.M[1][3] = y;
-  r.M[2][0] = 0; r.M[2][1] = 0; r.M[2][2] = 1; r.M[2][3] = z;
-  r.M[3][0] = 0; r.M[3][1] = 0; r.M[3][2] = 0; r.M[3][3] = 1;
+  weston_matrix_init(&m1);
+  weston_matrix_init(&m2);
 
-  return r;
+  m1.d[0] = q.f[3];   m1.d[4] = q.f[2];   m1.d[8] = -q.f[1];  m1.d[12] = q.f[0];
+  m1.d[1] = -q.f[2];  m1.d[5] = q.f[3];   m1.d[9] = q.f[0];   m1.d[13] = q.f[1];
+  m1.d[2] = q.f[1];   m1.d[6] = -q.f[0];  m1.d[10] = q.f[3];  m1.d[14] = q.f[2];
+  m1.d[3] = -q.f[0];  m1.d[7] = -q.f[1];  m1.d[11] = -q.f[2]; m1.d[15] = q.f[3];
+  m1.type = WESTON_MATRIX_TRANSFORM_ROTATE;
+
+  m2.d[0] = q.f[3];   m2.d[4] = q.f[2];   m2.d[8] = -q.f[1];  m2.d[12] = -q.f[0];
+  m2.d[1] = -q.f[2];  m2.d[5] = q.f[3];   m2.d[9] = q.f[0];   m2.d[13] = -q.f[1];
+  m2.d[2] = q.f[1];   m2.d[6] = -q.f[0];  m2.d[10] = q.f[3];  m2.d[14] = -q.f[2];
+  m2.d[3] = q.f[0];   m2.d[7] = q.f[1];   m2.d[11] = q.f[2];  m2.d[15] = q.f[3];
+  m2.type = WESTON_MATRIX_TRANSFORM_ROTATE;
+
+//#warning "Double check the order here"
+  weston_matrix_multiply(&m1, &m2);
+  return m1;
 }
 
-static inline ovrMatrix4f matrix4fMul(const ovrMatrix4f m1, const ovrMatrix4f m2)
+static inline struct weston_matrix initTranslation(const struct weston_vector position)
 {
-  ovrMatrix4f result;
-  int i, j;
-
-  for(i=0; i<4; i++)
-  {
-    for(j=0; j<4; j++)
-    {
-      result.M[i][j] = 
-        m1.M[i][0] * m2.M[0][j] +
-        m1.M[i][1] * m2.M[1][j] +
-        m1.M[i][2] * m2.M[2][j] +
-        m1.M[i][3] * m2.M[3][j];
-    }
-  }
-
-  return result;
+  return initTranslationF(position.f[0], position.f[1], position.f[2]);
 }
 
-static inline ovrMatrix4f quatfToMatrix4f(const ovrQuatf q)
+static inline struct weston_matrix posefToMatrix4f(const struct weston_vector attitude, const struct weston_vector position)
 {
-  ovrMatrix4f m1, m2;
+  struct weston_matrix orientation = quatfToMatrix4f(attitude);
+  struct weston_matrix translation = initTranslation(position);
+  translation.d[12] = -translation.d[12];
+  translation.d[13] = -translation.d[13];
+  translation.d[14] = -translation.d[14];
 
-  m1.M[0][0] = q.w; m1.M[0][1] = q.z; m1.M[0][2] = -q.y; m1.M[0][3] = q.x;
-  m1.M[1][0] = -q.z; m1.M[1][1] = q.w; m1.M[1][2] = q.x; m1.M[1][3] = q.y;
-  m1.M[2][0] = q.y; m1.M[2][1] = -q.x; m1.M[2][2] = q.w; m1.M[2][3] = q.z;
-  m1.M[3][0] = -q.x; m1.M[3][1] = -q.y; m1.M[3][2] = -q.z; m1.M[3][3] = q.w;
-
-  m2.M[0][0] = q.w; m2.M[0][1] = q.z; m2.M[0][2] = -q.y; m2.M[0][3] = -q.x;
-  m2.M[1][0] = -q.z; m2.M[1][1] = q.w; m2.M[1][2] = q.x; m2.M[1][3] = -q.y;
-  m2.M[2][0] = q.y; m2.M[2][1] = -q.x; m2.M[2][2] = q.w; m2.M[2][3] = -q.z;
-  m2.M[3][0] = q.x; m2.M[3][1] = q.y; m2.M[3][2] = q.z; m2.M[3][3] = q.w;
-
-  return matrix4fMul(m1, m2);
-}
-
-static inline ovrMatrix4f initTranslation(const ovrVector3f position)
-{
-  ovrMatrix4f r;
-
-  r.M[0][0] = 1; r.M[0][1] = 0; r.M[0][2] = 0; r.M[0][3] = position.x;
-  r.M[1][0] = 0; r.M[1][1] = 1; r.M[1][2] = 0; r.M[1][3] = position.y;
-  r.M[2][0] = 0; r.M[2][1] = 0; r.M[2][2] = 1; r.M[2][3] = position.z;
-  r.M[3][0] = 0; r.M[3][1] = 0; r.M[3][2] = 0; r.M[3][3] = 1;
-
-  return r;
-}
-
-/* // It turns out we don't need inverse or transpose just yet, we can just use
-   // row-major methods (basically, just reverse order of matrix multiplication)
-
-  static inline ovrMatrix4f inverse(const ovrMatrix4f matrix)
-{
-  float *m = (float *)&matrix.M;
-  ovrMatrix4f result;
-  float *invOut = (float *)&result.M;
-  float inv[16], det;
-  int i;
-  
-    inv[0] = m[5]  * m[10] * m[15] - 
-             m[5]  * m[11] * m[14] - 
-             m[9]  * m[6]  * m[15] + 
-             m[9]  * m[7]  * m[14] +
-             m[13] * m[6]  * m[11] - 
-             m[13] * m[7]  * m[10];
-
-    inv[4] = -m[4]  * m[10] * m[15] + 
-              m[4]  * m[11] * m[14] + 
-              m[8]  * m[6]  * m[15] - 
-              m[8]  * m[7]  * m[14] - 
-              m[12] * m[6]  * m[11] + 
-              m[12] * m[7]  * m[10];
-
-    inv[8] = m[4]  * m[9] * m[15] - 
-             m[4]  * m[11] * m[13] - 
-             m[8]  * m[5] * m[15] + 
-             m[8]  * m[7] * m[13] + 
-             m[12] * m[5] * m[11] - 
-             m[12] * m[7] * m[9];
-
-    inv[12] = -m[4]  * m[9] * m[14] + 
-               m[4]  * m[10] * m[13] +
-               m[8]  * m[5] * m[14] - 
-               m[8]  * m[6] * m[13] - 
-               m[12] * m[5] * m[10] + 
-               m[12] * m[6] * m[9];
-
-    inv[1] = -m[1]  * m[10] * m[15] + 
-              m[1]  * m[11] * m[14] + 
-              m[9]  * m[2] * m[15] - 
-              m[9]  * m[3] * m[14] - 
-              m[13] * m[2] * m[11] + 
-              m[13] * m[3] * m[10];
-
-    inv[5] = m[0]  * m[10] * m[15] - 
-             m[0]  * m[11] * m[14] - 
-             m[8]  * m[2] * m[15] + 
-             m[8]  * m[3] * m[14] + 
-             m[12] * m[2] * m[11] - 
-             m[12] * m[3] * m[10];
-
-    inv[9] = -m[0]  * m[9] * m[15] + 
-              m[0]  * m[11] * m[13] + 
-              m[8]  * m[1] * m[15] - 
-              m[8]  * m[3] * m[13] - 
-              m[12] * m[1] * m[11] + 
-              m[12] * m[3] * m[9];
-
-    inv[13] = m[0]  * m[9] * m[14] - 
-              m[0]  * m[10] * m[13] - 
-              m[8]  * m[1] * m[14] + 
-              m[8]  * m[2] * m[13] + 
-              m[12] * m[1] * m[10] - 
-              m[12] * m[2] * m[9];
-
-    inv[2] = m[1]  * m[6] * m[15] - 
-             m[1]  * m[7] * m[14] - 
-             m[5]  * m[2] * m[15] + 
-             m[5]  * m[3] * m[14] + 
-             m[13] * m[2] * m[7] - 
-             m[13] * m[3] * m[6];
-
-    inv[6] = -m[0]  * m[6] * m[15] + 
-              m[0]  * m[7] * m[14] + 
-              m[4]  * m[2] * m[15] - 
-              m[4]  * m[3] * m[14] - 
-              m[12] * m[2] * m[7] + 
-              m[12] * m[3] * m[6];
-
-    inv[10] = m[0]  * m[5] * m[15] - 
-              m[0]  * m[7] * m[13] - 
-              m[4]  * m[1] * m[15] + 
-              m[4]  * m[3] * m[13] + 
-              m[12] * m[1] * m[7] - 
-              m[12] * m[3] * m[5];
-
-    inv[14] = -m[0]  * m[5] * m[14] + 
-               m[0]  * m[6] * m[13] + 
-               m[4]  * m[1] * m[14] - 
-               m[4]  * m[2] * m[13] - 
-               m[12] * m[1] * m[6] + 
-               m[12] * m[2] * m[5];
-
-    inv[3] = -m[1] * m[6] * m[11] + 
-              m[1] * m[7] * m[10] + 
-              m[5] * m[2] * m[11] - 
-              m[5] * m[3] * m[10] - 
-              m[9] * m[2] * m[7] + 
-              m[9] * m[3] * m[6];
-
-    inv[7] = m[0] * m[6] * m[11] - 
-             m[0] * m[7] * m[10] - 
-             m[4] * m[2] * m[11] + 
-             m[4] * m[3] * m[10] + 
-             m[8] * m[2] * m[7] - 
-             m[8] * m[3] * m[6];
-
-    inv[11] = -m[0] * m[5] * m[11] + 
-               m[0] * m[7] * m[9] + 
-               m[4] * m[1] * m[11] - 
-               m[4] * m[3] * m[9] - 
-               m[8] * m[1] * m[7] + 
-               m[8] * m[3] * m[5];
-
-    inv[15] = m[0] * m[5] * m[10] - 
-              m[0] * m[6] * m[9] - 
-              m[4] * m[1] * m[10] + 
-              m[4] * m[2] * m[9] + 
-              m[8] * m[1] * m[6] - 
-              m[8] * m[2] * m[5];
-
-    det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
-
-    if (det == 0)
-    {
-      weston_log("Error, matrix inverse determinant is zero\n");
-      return initIdentity();
-    }
-
-    det = 1.0 / det;
-
-    for (i = 0; i < 16; i++)
-        invOut[i] = inv[i] * det;
-
-    return result;
-}
-
-static inline ovrMatrix4f transpose(const ovrMatrix4f m)
-{
-  ovrMatrix4f result;
-  int i, j;
-
-  for(i=0; i<4; i++)
-  {
-    for(j=0; j<4; j++)
-    {
-      result.M[i][j] = m.M[j][i];
-    }
-  }
-  return result;
-}*/
-
-static inline ovrMatrix4f posefToMatrix4f(const ovrPosef pose)
-{
-  ovrMatrix4f orientation = quatfToMatrix4f(pose.Orientation);
-  ovrMatrix4f translation = initTranslation(pose.Position);
-  translation.M[0][3] = -translation.M[0][3];
-  translation.M[1][3] = -translation.M[1][3];
-  translation.M[2][3] = -translation.M[2][3];
-
-  return matrix4fMul(translation, orientation);
+  weston_matrix_multiply(&translation, &orientation);
+  return translation;
 }
 
 // End of Matrix, Quaternion, and Vector math
@@ -636,6 +450,7 @@ setup_rift(struct weston_compositor *compositor)
   eglBindTexImage(rift->egl_display, rift->pbuffer, EGL_BACK_BUFFER);
   eglMakeCurrent(rift->egl_display, rift->orig_surface, rift->orig_surface, rift->egl_context);*/
 
+#if defined(LIBOVR)
   ovr_Initialize(0);
   rift->hmd = ovrHmd_Create(0);
   if(rift->hmd == NULL)
@@ -645,15 +460,29 @@ setup_rift(struct weston_compositor *compositor)
   ovrHmd_ConfigureTracking(rift->hmd, ovrTrackingCap_Orientation | 
       ovrTrackingCap_Position | ovrTrackingCap_MagYawCorrection, 0);
   ovrHmd_ResetFrameTiming(rift->hmd, 0);
+#endif
 
   int eye;
   for(eye = 0; eye < 2; eye++)
   {
+#if defined(LIBOVR)
     ovrFovPort fov = rift->hmd->DefaultEyeFov[eye];
     ovrEyeRenderDesc renderDesc = ovrHmd_GetRenderDesc(rift->hmd, eye, fov);
+#endif
     struct EyeArg *eyeArg = &rift->eyeArgs[eye];
 
-    eyeArg->projection = ovrMatrix4f_Projection(fov, 0.1, 100000, true);
+#if defined(LIBOVR)
+    ovrMatrix4f proj = ovrMatrix4f_Projection(fov, 0.1, 100000, true);
+    eyeArg->projection = initIdentity();
+    int k, j;
+    for(k=0; k<4; k++)
+    {
+      for(j=0; j<4; j++)
+      {
+        eyeArg->projection.d[4*k+j] = proj.M[k][j];
+      }
+    }
+    eyeArg->projection.type = WESTON_MATRIX_TRANSFORM_OTHER;
     /*int j, k;
     for(k=0; k<4; k++)
     {
@@ -663,13 +492,17 @@ setup_rift(struct weston_compositor *compositor)
       }
       printf("\n");
     }*/
-    rift->hmdToEyeOffsets[eye] = renderDesc.HmdToEyeViewOffset;
+    rift->hmdToEyeOffsets[eye].f[0] = renderDesc.HmdToEyeViewOffset.x;
+    rift->hmdToEyeOffsets[eye].f[1] = renderDesc.HmdToEyeViewOffset.y;
+    rift->hmdToEyeOffsets[eye].f[2] = renderDesc.HmdToEyeViewOffset.z;
+    rift->hmdToEyeOffsets[eye].f[3] = 0;
     ovrRecti texRect;
     texRect.Size = ovrHmd_GetFovTextureSize(rift->hmd, eye, rift->hmd->DefaultEyeFov[eye],
         1.0f);
     texRect.Pos.x = texRect.Pos.y = 0;
     eyeArg->textureWidth = texRect.Size.w;
     eyeArg->textureHeight = texRect.Size.h;
+#endif
 
     glGenTextures(1, &eyeArg->texture);
     glBindTexture(GL_TEXTURE_2D, eyeArg->texture);
@@ -718,21 +551,29 @@ setup_rift(struct weston_compositor *compositor)
         rift->egl_display, rift->egl_config, 
         eyePbufferAttributes);*/
 
+#if defined(LIBOVR)
     ovrVector2f scaleAndOffset[2];
     ovrHmd_GetRenderScaleAndOffset(fov, texRect.Size, texRect, scaleAndOffset);
-    eyeArg->scale = scaleAndOffset[0];
-    eyeArg->offset = scaleAndOffset[1];
+    eyeArg->scale.f[0] = scaleAndOffset[0].x;
+    eyeArg->scale.f[1] = scaleAndOffset[0].y;
+    eyeArg->offset.f[0] = scaleAndOffset[1].x;
+    eyeArg->offset.f[1] = scaleAndOffset[1].y;
 
     ovrHmd_CreateDistortionMesh(rift->hmd, eye, fov, 0, &eyeArg->mesh);
+#endif
 
     glGenBuffers(1, &eyeArg->indexBuffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eyeArg->indexBuffer);
+#if defined(LIBOVR)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, eyeArg->mesh.IndexCount * sizeof(unsigned short), eyeArg->mesh.pIndexData, GL_STATIC_DRAW);
+    eyeArg->indexBufferCount = eyeArg->mesh.IndexCount;
+#endif
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
+    uint i;
+#if defined(LIBOVR)
     float vertices_buffer[eyeArg->mesh.VertexCount*2];
     float uvs_buffer[3][eyeArg->mesh.VertexCount*2];
-    uint i;
     for(i=0; i<eyeArg->mesh.VertexCount; i++)
     {
       ovrDistortionVertex vertex = eyeArg->mesh.pVertexData[i];
@@ -745,15 +586,20 @@ setup_rift(struct weston_compositor *compositor)
       uvs_buffer[2][i*2] = vertex.TanEyeAnglesB.x;
       uvs_buffer[2][(i*2)+1] = vertex.TanEyeAnglesB.y;
     }
+#endif
 
     glGenBuffers(1, &eyeArg->vertexBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, eyeArg->vertexBuffer);
+#if defined(LIBOVR)
     glBufferData(GL_ARRAY_BUFFER, eyeArg->mesh.VertexCount * sizeof(GL_FLOAT) * 2, vertices_buffer, GL_STATIC_DRAW);
+#endif
     glGenBuffers(3, &eyeArg->uvsBuffer[0]);
     for(i=0; i<3; i++)
     {
       glBindBuffer(GL_ARRAY_BUFFER, eyeArg->uvsBuffer[i]);
+#if defined(LIBOVR)
       glBufferData(GL_ARRAY_BUFFER, eyeArg->mesh.VertexCount * sizeof(GL_FLOAT) * 2, uvs_buffer[i], GL_STATIC_DRAW);
+#endif
       glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
   }
@@ -763,6 +609,7 @@ setup_rift(struct weston_compositor *compositor)
 int
 render_rift(struct weston_compositor *compositor, GLuint original_program)
 {
+  int i;
   struct oculus_rift *rift = compositor->rift;
 
   // copy rift->pbuffer into rift->texture
@@ -777,24 +624,47 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
 
   static int frameIndex = 0;
   ++frameIndex;
+#if defined(LIBOVR)
   ovrPosef eyePoses[2];
   ovrHmd_BeginFrameTiming(rift->hmd, frameIndex);
-  ovrHmd_GetEyePoses(rift->hmd, frameIndex, rift->hmdToEyeOffsets, eyePoses, NULL);
+  ovrVector3f eye_offsets[2];
+  for (i=0; i<2; i++)
+  {
+    eye_offsets[i].x = rift->hmdToEyeOffsets[i].f[0];
+    eye_offsets[i].y = rift->hmdToEyeOffsets[i].f[1];
+    eye_offsets[i].z = rift->hmdToEyeOffsets[i].f[2];
+  }
+  ovrHmd_GetEyePoses(rift->hmd, frameIndex, eye_offsets, eyePoses, NULL);
+#endif
 
   glEnable(GL_DEPTH_TEST);
   glUseProgram(rift->eye_shader->program);
-  int i;
   for(i=0; i<2; i++)
   {
+#if defined(LIBOVR)
     const ovrEyeType eye = rift->hmd->EyeRenderOrder[i];
+#endif
     struct EyeArg eyeArg = rift->eyeArgs[eye];
     
-    ovrMatrix4f Model = initTranslationF(0.0, 0.0, rift->screen_z);
-    Model = matrix4fMul(initScale(
-          3.2 * rift->screen_scale, 
-          1.8 * rift->screen_scale, 
-          1.0), Model);
-    ovrMatrix4f MV = matrix4fMul(posefToMatrix4f(eyePoses[eye]), Model);
+    struct weston_matrix Model = initTranslationF(0.0, 0.0, rift->screen_z);
+    struct weston_matrix Scale = initIdentity();
+    weston_matrix_scale(&Scale, 3.2 * rift->screen_scale, 1.8 * rift->screen_scale, 1.0);
+    weston_matrix_multiply(&Scale, &Model);
+    struct weston_matrix MV;
+#if defined(LIBOVR)
+    struct weston_vector eye_quat;
+    eye_quat.f[0] = eyePoses[eye].Orientation.x;
+    eye_quat.f[1] = eyePoses[eye].Orientation.y;
+    eye_quat.f[2] = eyePoses[eye].Orientation.z;
+    eye_quat.f[3] = eyePoses[eye].Orientation.w;
+    struct weston_vector eye_pos;
+    eye_pos.f[0] = eyePoses[eye].Position.x;
+    eye_pos.f[1] = eyePoses[eye].Position.y;
+    eye_pos.f[2] = eyePoses[eye].Position.z;
+    eye_pos.f[3] = 0;
+    MV = posefToMatrix4f(eye_quat, eye_pos);
+#endif
+    weston_matrix_multiply(&MV, &Scale);
     //MV = initIdentity();
     //MV.M[2][3] = 5;
 
@@ -804,8 +674,8 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUniform1i(rift->eye_shader->virtualScreenTexture, 0);
-    glUniformMatrix4fv(rift->eye_shader->Projection, 1, GL_FALSE, &eyeArg.projection.M[0][0]);
-    glUniformMatrix4fv(rift->eye_shader->ModelView, 1, GL_FALSE, &MV.M[0][0]);
+    glUniformMatrix4fv(rift->eye_shader->Projection, 1, GL_FALSE, &eyeArg.projection.d[0]);
+    glUniformMatrix4fv(rift->eye_shader->ModelView, 1, GL_FALSE, &MV.d[0]);
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
@@ -877,7 +747,7 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eyeArg.indexBuffer);
 
-    glDrawElements(GL_TRIANGLES, eyeArg.mesh.IndexCount, GL_UNSIGNED_SHORT, 0);
+    glDrawElements(GL_TRIANGLES, eyeArg.indexBufferCount, GL_UNSIGNED_SHORT, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -886,7 +756,9 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
   //glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
 
+#if defined(LIBOVR)
   ovrHmd_EndFrameTiming(rift->hmd);
+#endif
 
   // set program back to original shader program
   glUseProgram(original_program);
