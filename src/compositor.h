@@ -27,6 +27,7 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
+#include <config.h>
 
 #include <stdbool.h>
 #include <time.h>

@@ -25,7 +25,11 @@
 
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
-#include <OVR_CAPI.h>
+#if defined(LIBOVR)
+    #include <OVR_CAPI.h>
+#else
+    #error "don't know what HMD library to use"
+#endif
 
 struct EyeArg {
   GLuint framebuffer;

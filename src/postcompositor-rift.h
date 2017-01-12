@@ -23,6 +23,8 @@
 #ifndef _POSTCOMPOSITOR_RIFT_H_
 #define _POSTCOMPOSITOR_RIFT_H_
 
+#include "config.h"
+
 #include <EGL/egl.h>
 
 #include "compositor.h"

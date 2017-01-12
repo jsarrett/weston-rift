@@ -3,7 +3,6 @@
 #include "gl-renderer.h"
 #include <wayland-server.h>
 #include <GLES2/gl2.h>
-#include <OVR_CAPI.h>
 #include <linux/input.h>
 
 // Rift shaders
