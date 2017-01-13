@@ -92,6 +92,23 @@ static inline struct weston_matrix initIdentity(void)
   return r;
 }
 
+
+static inline struct weston_matrix transposeMat(const struct weston_matrix s)
+{
+  struct weston_matrix r;
+  r.type = s.type;
+  for (int i = 0; i < 4; i++)
+  {
+    for (int j = 0; j < 4; j++)
+    {
+      r.d[4*i+j] = s.d[4*j+i];
+    }
+  }
+
+  return r;
+}
+
+
 static inline struct weston_matrix initTranslationF(float x, float y, float z)
 {
   struct weston_matrix r;
