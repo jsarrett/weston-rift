@@ -40,6 +40,7 @@ struct EyeArg {
   struct weston_matrix projection;
 #if defined(LIBOVR)
   ovrDistortionMesh mesh;
+#elif defined(OPENHMD)
 #endif
   GLuint indexBuffer;
   GLuint indexBufferCount;
@@ -95,6 +96,9 @@ struct oculus_rift {
   struct weston_vector hmdToEyeOffsets[2];
 #if defined(LIBOVR)
   ovrHmd hmd;
+#elif defined(OPENHMD)
+  ohmd_context *hmd_ctx;
+  ohmd_device *hmd;
 #endif
   int width;
   int height;

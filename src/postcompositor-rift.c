@@ -477,6 +477,65 @@ setup_rift(struct weston_compositor *compositor)
   ovrHmd_ConfigureTracking(rift->hmd, ovrTrackingCap_Orientation | 
       ovrTrackingCap_Position | ovrTrackingCap_MagYawCorrection, 0);
   ovrHmd_ResetFrameTiming(rift->hmd, 0);
+#elif defined(OPENHMD)
+  uint32_t screen_w = 0;
+  uint32_t screen_h = 0;
+  if(rift->hmd_ctx == NULL) {
+      rift->hmd_ctx = ohmd_ctx_create();
+  }
+  if(rift->hmd == NULL)
+  {
+    ohmd_device *hmd;
+    ohmd_context *ctx = rift->hmd_ctx;
+    int num_devices = ohmd_ctx_probe(rift->hmd_ctx);
+    if(num_devices < 0)
+    {
+      printf("failed to probe devices: %s\n", ohmd_ctx_get_error(ctx));
+      return -1;
+    }
+
+    printf("num devices: %d\n", num_devices);
+
+    for(int i = 0; i < num_devices; i++)
+    {
+      printf("vendor: %s\n", ohmd_list_gets(ctx, i, OHMD_VENDOR));
+      printf("product: %s\n", ohmd_list_gets(ctx, i, OHMD_PRODUCT));
+      printf("path: %s\n", ohmd_list_gets(ctx, i, OHMD_PATH));
+    }
+
+    hmd = ohmd_list_open_device(ctx, 0);
+    if(!hmd)
+    {
+      printf("failed to open device: %s\n", ohmd_ctx_get_error(ctx));
+      return -1;
+    }
+
+    float fval = 0.0f;
+    int ival = 0;
+    ohmd_device_geti(hmd, OHMD_SCREEN_HORIZONTAL_RESOLUTION, &ival);
+    printf("hres: %i\n", ival);
+    screen_w = ival;
+    //for now assume left eye is left half of the screen
+    ohmd_device_geti(hmd, OHMD_SCREEN_VERTICAL_RESOLUTION, &ival);
+    printf("vres: %i\n", ival);
+    screen_h = ival;
+
+    ohmd_device_getf(hmd, OHMD_SCREEN_HORIZONTAL_SIZE, &fval);
+    printf("hsize: %f\n", fval);
+    ohmd_device_getf(hmd, OHMD_SCREEN_VERTICAL_SIZE, &fval);
+    printf("vsize: %f\n", fval);
+
+    ohmd_device_getf(hmd, OHMD_LENS_HORIZONTAL_SEPARATION, &fval);
+    printf("lens seperation: %f\n", fval);
+    ohmd_device_getf(hmd, OHMD_LENS_VERTICAL_POSITION, &fval);
+    printf("lens vcenter: %f\n", fval);
+    ohmd_device_getf(hmd, OHMD_LEFT_EYE_FOV, &fval);
+    printf("fov: %f\n", fval);
+    ohmd_device_getf(hmd, OHMD_LEFT_EYE_ASPECT_RATIO, &fval);
+    printf("aspect: %f\n", fval);
+
+    rift->hmd = hmd;
+  }
 #endif
 
   int eye;
@@ -519,6 +578,17 @@ setup_rift(struct weston_compositor *compositor)
     texRect.Pos.x = texRect.Pos.y = 0;
     eyeArg->textureWidth = texRect.Size.w;
     eyeArg->textureHeight = texRect.Size.h;
+#elif defined(OPENHMD)
+    eyeArg->projection = initIdentity();
+    eyeArg->projection.type = WESTON_MATRIX_TRANSFORM_OTHER;
+    if (eye == 0)
+      ohmd_device_getf(rift->hmd, OHMD_LEFT_EYE_GL_PROJECTION_MATRIX, eyeArg->projection.d);
+    else
+      ohmd_device_getf(rift->hmd, OHMD_RIGHT_EYE_GL_PROJECTION_MATRIX, eyeArg->projection.d);
+      eyeArg->projection = transposeMat(eyeArg->projection);
+
+    eyeArg->textureWidth = screen_w;
+    eyeArg->textureHeight = screen_h;
 #endif
 
     glGenTextures(1, &eyeArg->texture);
@@ -577,6 +647,21 @@ setup_rift(struct weston_compositor *compositor)
     eyeArg->offset.f[1] = scaleAndOffset[1].y;
 
     ovrHmd_CreateDistortionMesh(rift->hmd, eye, fov, 0, &eyeArg->mesh);
+#elif defined(OPENHMD)
+    if (eye == 0)
+    {
+      eyeArg->scale.f[0] = 1.0f;
+      eyeArg->scale.f[1] = 1.0f;
+      eyeArg->offset.f[0] = 0.0f;
+      eyeArg->offset.f[1] = 0.0f;
+    }
+    else
+    {
+      eyeArg->scale.f[0] = 1.0f;
+      eyeArg->scale.f[1] = 1.0f;
+      eyeArg->offset.f[0] = 0.0f;
+      eyeArg->offset.f[1] = 0.0f;
+    }
 #endif
 
     glGenBuffers(1, &eyeArg->indexBuffer);
@@ -584,6 +669,11 @@ setup_rift(struct weston_compositor *compositor)
 #if defined(LIBOVR)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, eyeArg->mesh.IndexCount * sizeof(unsigned short), eyeArg->mesh.pIndexData, GL_STATIC_DRAW);
     eyeArg->indexBufferCount = eyeArg->mesh.IndexCount;
+#elif defined(OPENHMD)
+    //for now dummy rectangular mesh
+    unsigned short mesh_idxs[6] = {0,1,2,3,4,5};
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(mesh_idxs), mesh_idxs, GL_STATIC_DRAW);
+    eyeArg->indexBufferCount = 6;
 #endif
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -603,12 +693,35 @@ setup_rift(struct weston_compositor *compositor)
       uvs_buffer[2][i*2] = vertex.TanEyeAnglesB.x;
       uvs_buffer[2][(i*2)+1] = vertex.TanEyeAnglesB.y;
     }
+#elif defined(OPENHMD)
 #endif
 
     glGenBuffers(1, &eyeArg->vertexBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, eyeArg->vertexBuffer);
 #if defined(LIBOVR)
     glBufferData(GL_ARRAY_BUFFER, eyeArg->mesh.VertexCount * sizeof(GL_FLOAT) * 2, vertices_buffer, GL_STATIC_DRAW);
+#elif defined(OPENHMD)
+    //for now dummy rectangular mesh
+    GLfloat rect_mesh[12];
+    if (eye == 0) {
+      float *r = rect_mesh;
+      r[0] = -1.0f; r[1] = 1.0f;
+      r[2] = 0.0f;  r[3] = 1.0f;
+      r[4] = -1.0f; r[5] = -1.0f;
+      r[6] = 0.0f;  r[7] = 1.0f;
+      r[8] = 0.0f;  r[9] = -1.0f;
+      r[10] = -1.0f; r[11] = -1.0f;
+    }
+    else {
+      float *r = rect_mesh;
+      r[0] = 0.0f;  r[1] = 1.0f;
+      r[2] = 1.0f;  r[3] = 1.0f;
+      r[4] = 0.0f;  r[5] = -1.0f;
+      r[6] = 1.0f;  r[7] = 1.0f;
+      r[8] = 1.0f;  r[9] = -1.0f;
+      r[10] = 0.0f;  r[11] = -1.0f;
+    }
+    glBufferData(GL_ARRAY_BUFFER, sizeof(rect_mesh), rect_mesh, GL_STATIC_DRAW);
 #endif
     glGenBuffers(3, &eyeArg->uvsBuffer[0]);
     for(i=0; i<3; i++)
@@ -616,6 +729,10 @@ setup_rift(struct weston_compositor *compositor)
       glBindBuffer(GL_ARRAY_BUFFER, eyeArg->uvsBuffer[i]);
 #if defined(LIBOVR)
       glBufferData(GL_ARRAY_BUFFER, eyeArg->mesh.VertexCount * sizeof(GL_FLOAT) * 2, uvs_buffer[i], GL_STATIC_DRAW);
+#elif defined(OPENHMD)
+      //glBufferData(GL_ARRAY_BUFFER, sizeof(uvs[i]), uvs[i], GL_STATIC_DRAW);
+/* since we don't handle distortion and chromatic aberration yet, just use the green channel uvs for every one */
+      glBufferData(GL_ARRAY_BUFFER, sizeof(uvs[1]), uvs[1], GL_STATIC_DRAW);
 #endif
       glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
@@ -652,6 +769,7 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
     eye_offsets[i].z = rift->hmdToEyeOffsets[i].f[2];
   }
   ovrHmd_GetEyePoses(rift->hmd, frameIndex, eye_offsets, eyePoses, NULL);
+#elif defined(OPENHMD)
 #endif
 
   glEnable(GL_DEPTH_TEST);
@@ -660,6 +778,9 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
   {
 #if defined(LIBOVR)
     const ovrEyeType eye = rift->hmd->EyeRenderOrder[i];
+#elif defined(OPENHMD)
+    //assume left,right render order
+    const int eye = i;
 #endif
     struct EyeArg eyeArg = rift->eyeArgs[eye];
     
@@ -680,8 +801,15 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
     eye_pos.f[2] = eyePoses[eye].Position.z;
     eye_pos.f[3] = 0;
     MV = posefToMatrix4f(eye_quat, eye_pos);
-#endif
     weston_matrix_multiply(&MV, &Scale);
+#elif defined(OPENHMD)
+    MV.type = WESTON_MATRIX_TRANSFORM_SCALE | WESTON_MATRIX_TRANSFORM_ROTATE | WESTON_MATRIX_TRANSFORM_TRANSLATE;
+    if (eye == 0)
+      ohmd_device_getf(rift->hmd, OHMD_LEFT_EYE_GL_MODELVIEW_MATRIX, MV.d);
+    else
+      ohmd_device_getf(rift->hmd, OHMD_RIGHT_EYE_GL_MODELVIEW_MATRIX, MV.d);
+    MV = transposeMat(MV);
+#endif
     //MV = initIdentity();
     //MV.M[2][3] = 5;
 
@@ -775,6 +903,9 @@ render_rift(struct weston_compositor *compositor, GLuint original_program)
 
 #if defined(LIBOVR)
   ovrHmd_EndFrameTiming(rift->hmd);
+#elif defined(OPENHMD)
+  if (rift->hmd_ctx)
+    ohmd_ctx_update(rift->hmd_ctx);
 #endif
 
   // set program back to original shader program
